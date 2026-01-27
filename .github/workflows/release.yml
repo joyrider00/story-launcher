@@ -20,18 +20,7 @@ env:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            arch: aarch64
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            arch: x86_64
-
-    runs-on: ${{ matrix.platform }}
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
@@ -46,52 +35,31 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-apple-darwin
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Import Apple Developer Certificate
-        if: env.APPLE_CERTIFICATE != ''
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
-        run: |
-          echo $APPLE_CERTIFICATE | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          rm certificate.p12
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: v__VERSION__
           releaseName: 'Story Launcher v__VERSION__'
           releaseBody: 'See the assets to download and install this version.'
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
+          args: --target aarch64-apple-darwin
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}
+          name: macos-aarch64
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app.tar.gz.sig
 
   create-release:
     needs: build
@@ -101,7 +69,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -119,9 +87,8 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Find the signature files
+          # Find the signature file
           AARCH64_SIG=$(cat artifacts/macos-aarch64/*.sig 2>/dev/null || echo "")
-          X86_64_SIG=$(cat artifacts/macos-x86_64/*.sig 2>/dev/null || echo "")
 
           # Create the latest.json manifest
           cat > latest.json << EOF
@@ -133,10 +100,6 @@ jobs:
               "darwin-aarch64": {
                 "signature": "${AARCH64_SIG}",
                 "url": "https://github.com/joyrider00/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_aarch64.app.tar.gz"
-              },
-              "darwin-x86_64": {
-                "signature": "${X86_64_SIG}",
-                "url": "https://github.com/joyrider00/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_x64.app.tar.gz"
               }
             }
           }
@@ -153,9 +116,7 @@ jobs:
           prerelease: false
           files: |
             artifacts/macos-aarch64/*.dmg
-            artifacts/macos-x86_64/*.dmg
             artifacts/macos-aarch64/*.app.tar.gz
-            artifacts/macos-x86_64/*.app.tar.gz
             latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
