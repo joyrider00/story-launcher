@@ -132,11 +132,11 @@ jobs:
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${AARCH64_SIG}",
-                "url": "https://github.com/story-inc/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_aarch64.app.tar.gz"
+                "url": "https://github.com/joyrider00/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_aarch64.app.tar.gz"
               },
               "darwin-x86_64": {
                 "signature": "${X86_64_SIG}",
-                "url": "https://github.com/story-inc/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_x64.app.tar.gz"
+                "url": "https://github.com/joyrider00/story-launcher/releases/download/v${VERSION}/Story.Launcher_${VERSION}_x64.app.tar.gz"
               }
             }
           }
