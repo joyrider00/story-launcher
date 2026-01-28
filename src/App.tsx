@@ -8,19 +8,18 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { check } from "@tauri-apps/plugin-updater";
 import StoryLogo from "./assets/StoryLogo.svg";
 
-const APP_VERSION = "0.1.2";
+const APP_VERSION = "0.2.0";
 const STORE_NAME = "settings.json";
 
 interface ToolStatus {
   installed: boolean;
-  local_version: string | null;
-  local_commit: string | null;
-  remote_commit: string | null;
+  installed_version: string | null;
+  latest_version: string | null;
   has_update: boolean;
   error: string | null;
 }
 
-interface UpdateResult {
+interface ActionResult {
   success: boolean;
   message: string;
 }
@@ -195,23 +194,23 @@ function AppUpdateBanner({
   return null;
 }
 
-function LocalToolCard({
+function ToolCard({
   status,
   isLoading,
-  isUpdating,
+  isInstalling,
   onRefresh,
+  onInstall,
   onUpdate,
   onLaunch
 }: {
   status: ToolStatus | null;
   isLoading: boolean;
-  isUpdating: boolean;
+  isInstalling: boolean;
   onRefresh: () => void;
+  onInstall: () => void;
   onUpdate: () => void;
   onLaunch: () => void;
 }) {
-  const shortCommit = (hash: string | null) => hash?.slice(0, 7) || "—";
-
   return (
     <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
       <div className="p-5 flex items-start gap-4">
@@ -224,9 +223,6 @@ function LocalToolCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-lg font-semibold text-white">Resolve Sync Script</h3>
-            <span className="px-1.5 py-0.5 bg-zinc-800 text-zinc-400 text-xs rounded font-medium">
-              Local
-            </span>
           </div>
           <p className="text-sm text-zinc-400 mt-0.5">Auto-imports files to DaVinci Resolve</p>
 
@@ -236,23 +232,30 @@ function LocalToolCard({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
               </svg>
-              <span className="text-sm">Checking for updates...</span>
+              <span className="text-sm">Checking...</span>
             </div>
           ) : status ? (
             <div className="mt-3 space-y-1.5">
-              {status.installed ? (
+              {status.error ? (
+                <div className="flex items-center gap-2 text-amber-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  <span className="text-sm">{status.error}</span>
+                </div>
+              ) : (
                 <>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-16">Version:</span>
-                    <span className="text-sm text-zinc-300">{status.local_version || "—"}</span>
+                    <span className="text-xs text-zinc-500 w-20">Installed:</span>
+                    <span className="text-sm text-zinc-300">
+                      {status.installed ? `v${status.installed_version}` : "Not installed"}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-16">Local:</span>
-                    <code className="text-sm text-zinc-400 font-mono">{shortCommit(status.local_commit)}</code>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500 w-16">Remote:</span>
-                    <code className="text-sm text-zinc-400 font-mono">{shortCommit(status.remote_commit)}</code>
+                    <span className="text-xs text-zinc-500 w-20">Latest:</span>
+                    <span className="text-sm text-zinc-300">
+                      {status.latest_version ? `v${status.latest_version}` : "—"}
+                    </span>
                     {status.has_update && (
                       <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded font-medium">
                         Update available
@@ -260,13 +263,6 @@ function LocalToolCard({
                     )}
                   </div>
                 </>
-              ) : (
-                <div className="flex items-center gap-2 text-zinc-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  <span className="text-sm">Not installed</span>
-                </div>
               )}
             </div>
           ) : null}
@@ -285,7 +281,15 @@ function LocalToolCard({
       </div>
 
       <div className="px-5 py-3 bg-zinc-950/50 border-t border-zinc-800 flex items-center gap-2">
-        {status?.installed && (
+        {isInstalling ? (
+          <div className="flex items-center gap-2 text-zinc-400">
+            <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            <span className="text-sm">{status?.installed ? "Updating..." : "Installing..."}</span>
+          </div>
+        ) : status?.installed ? (
           <>
             <button
               onClick={onLaunch}
@@ -293,28 +297,26 @@ function LocalToolCard({
             >
               Open
             </button>
-
             {status.has_update && (
               <button
                 onClick={onUpdate}
-                disabled={isUpdating}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                {isUpdating ? (
-                  <>
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Updating...
-                  </>
-                ) : (
-                  "Update"
-                )}
+                Update
               </button>
             )}
           </>
-        )}
+        ) : status?.latest_version ? (
+          <button
+            onClick={onInstall}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Install
+          </button>
+        ) : null}
       </div>
     </div>
   );
@@ -386,18 +388,20 @@ const webApps: WebApp[] = [
 function AppsPage({
   status,
   isLoading,
-  isUpdating,
+  isInstalling,
   message,
   onRefresh,
+  onInstall,
   onUpdate,
   onLaunch,
   onMessage
 }: {
   status: ToolStatus | null;
   isLoading: boolean;
-  isUpdating: boolean;
+  isInstalling: boolean;
   message: { type: 'success' | 'error'; text: string } | null;
   onRefresh: () => void;
+  onInstall: () => void;
   onUpdate: () => void;
   onLaunch: () => void;
   onMessage: (msg: { type: 'success' | 'error'; text: string } | null) => void;
@@ -429,12 +433,13 @@ function AppsPage({
 
         <div className="max-w-2xl space-y-4">
           <div className="mb-6">
-            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-3">Local Tools</h2>
-            <LocalToolCard
+            <h2 className="text-sm font-medium text-zinc-500 uppercase tracking-wider mb-3">Tools</h2>
+            <ToolCard
               status={status}
               isLoading={isLoading}
-              isUpdating={isUpdating}
+              isInstalling={isInstalling}
               onRefresh={onRefresh}
+              onInstall={onInstall}
               onUpdate={onUpdate}
               onLaunch={onLaunch}
             />
@@ -477,7 +482,7 @@ function SettingsPage({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-sm font-medium text-white">Auto-update tools on launch</div>
-                  <div className="text-xs text-zinc-500">Automatically update local tools when updates are available</div>
+                  <div className="text-xs text-zinc-500">Automatically update installed tools when updates are available</div>
                 </div>
                 <Toggle
                   enabled={settings.autoUpdateOnLaunch}
@@ -509,6 +514,10 @@ function SettingsPage({
                 <span>Build</span>
                 <span className="text-zinc-300">Tauri + React</span>
               </div>
+              <div className="flex justify-between">
+                <span>Tools Location</span>
+                <span className="text-zinc-300 font-mono text-xs">~/.story-tools/</span>
+              </div>
               <div className="pt-2 border-t border-zinc-800 mt-3">
                 <p className="text-zinc-500 text-xs">© 2024 Story Co. All rights reserved.</p>
               </div>
@@ -524,7 +533,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>("apps");
   const [status, setStatus] = useState<ToolStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -587,40 +596,63 @@ function App() {
   const checkStatus = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await invoke<ToolStatus>("check_tool_status");
+      const result = await invoke<ToolStatus>("check_tool_status", { toolId: "resolve-sync" });
       setStatus(result);
       return result;
     } catch (err) {
       console.error("Failed to check status:", err);
+      setStatus({
+        installed: false,
+        installed_version: null,
+        latest_version: null,
+        has_update: false,
+        error: String(err),
+      });
       return null;
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const handleUpdate = useCallback(async () => {
-    setIsUpdating(true);
+  const handleInstall = useCallback(async () => {
+    setIsInstalling(true);
     setMessage(null);
     try {
-      const result = await invoke<UpdateResult>("update_tool");
+      const result = await invoke<ActionResult>("install_tool", { toolId: "resolve-sync" });
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message });
+        await checkStatus();
+      } else {
+        setMessage({ type: 'error', text: result.message });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: String(err) });
+    } finally {
+      setIsInstalling(false);
+    }
+  }, [checkStatus]);
+
+  const handleUpdate = useCallback(async () => {
+    setIsInstalling(true);
+    setMessage(null);
+    try {
+      const result = await invoke<ActionResult>("update_tool", { toolId: "resolve-sync" });
       if (result.success) {
         setMessage({ type: 'success', text: 'Update complete!' });
         await checkStatus();
       } else {
         setMessage({ type: 'error', text: result.message });
       }
-      return result;
     } catch (err) {
       setMessage({ type: 'error', text: String(err) });
-      return { success: false, message: String(err) };
     } finally {
-      setIsUpdating(false);
+      setIsInstalling(false);
     }
   }, [checkStatus]);
 
   const handleLaunch = async () => {
     try {
-      const result = await invoke<UpdateResult>("launch_tool");
+      const result = await invoke<ActionResult>("launch_tool", { toolId: "resolve-sync" });
       if (!result.success) {
         setMessage({ type: 'error', text: result.message });
       }
@@ -638,15 +670,15 @@ function App() {
 
       // If auto-update is enabled and there's an update available, run it silently
       if (settings.autoUpdateOnLaunch && toolStatus?.has_update) {
-        setIsUpdating(true);
+        setIsInstalling(true);
         try {
-          await invoke<UpdateResult>("update_tool");
+          await invoke<ActionResult>("update_tool", { toolId: "resolve-sync" });
           // Refresh status after update
           await checkStatus();
         } catch (err) {
           console.error("Auto-update failed:", err);
         } finally {
-          setIsUpdating(false);
+          setIsInstalling(false);
         }
       }
     };
@@ -739,9 +771,10 @@ function App() {
         <AppsPage
           status={status}
           isLoading={isLoading}
-          isUpdating={isUpdating}
+          isInstalling={isInstalling}
           message={message}
           onRefresh={checkStatus}
+          onInstall={handleInstall}
           onUpdate={handleUpdate}
           onLaunch={handleLaunch}
           onMessage={setMessage}
