@@ -8,7 +8,7 @@ import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { check } from "@tauri-apps/plugin-updater";
 import StoryLogo from "./assets/StoryLogo.svg";
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.1.2";
 const STORE_NAME = "settings.json";
 
 interface ToolStatus {
