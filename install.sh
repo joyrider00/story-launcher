@@ -33,12 +33,24 @@ DMG_PATH="$TEMP_DIR/StoryLauncher.dmg"
 # Download DMG
 curl -L -o "$DMG_PATH" "$RELEASE_URL"
 
-# Mount DMG
+# Verify downloaded file
+echo "Verifying download..."
+FILE_TYPE=$(file -b "$DMG_PATH")
+if [[ ! "$FILE_TYPE" =~ "compressed" && ! "$FILE_TYPE" =~ "Apple" && ! "$FILE_TYPE" =~ "data" ]]; then
+    echo "Error: Downloaded file is not a valid DMG"
+    echo "File type: $FILE_TYPE"
+    rm -rf "$TEMP_DIR"
+    exit 1
+fi
+
+# Mount DMG (use 2>/dev/null to suppress checksumming output, not -quiet which suppresses mount point)
 echo "Mounting DMG..."
-MOUNT_POINT=$(hdiutil attach "$DMG_PATH" -nobrowse -quiet | grep "/Volumes" | cut -f 3-)
+MOUNT_OUTPUT=$(hdiutil attach "$DMG_PATH" -nobrowse 2>/dev/null)
+MOUNT_POINT=$(echo "$MOUNT_OUTPUT" | grep "/Volumes" | cut -f 3-)
 
 if [ -z "$MOUNT_POINT" ]; then
     echo "Error: Failed to mount DMG"
+    echo "Mount output: $MOUNT_OUTPUT"
     rm -rf "$TEMP_DIR"
     exit 1
 fi
